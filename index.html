@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Choropleth Map</title>
+  <style>
+    /* CSS for tooltip, legend, and map container */
+    h1, p {
+        font-family: "Open Sans";
+        font-style: normal;
+        text-align: center;
+        position: relative;
+        margin-top: auto;    
+      }
+    .leftp {
+      text-align: left;
+    }
+    
+
+
+    .tooltip {
+      position: absolute;
+      background-color: #fff;
+      padding: 10px;
+      border: 1px solid #ccc;
+      border-radius: 5px;
+      pointer-events: none;
+      opacity: 0;
+    }
+
+    .legend {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin-bottom: 5px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+    }
+
+    #map-container {
+      margin: 20px;
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+  <div>
+    <h1>Sinapore Population Density: Choropleth Map</h1>
+    <p>In this exercise, I create a choropleth map of Singapore's population density. D3 library is used to load map data and population information, merging them to display population density. The map features tooltips showing population details on hover and a legend for population ranges. The map also scales polygons on hover based on their area, with smaller polygons scaling more significantly. The tooltip and legend enhance the map's interactivity and readability.</p>
+    <p><a href="https://www.behance.net/praveen74403">Praveen Govindarajan</a></p>
+  </div>
+<div id="map-container">
+  <svg></svg>
+  <div id="tooltip" class="tooltip"></div>
+  <div class="legend" id="legend"></div>
+</div>
+<div> 
+  <h2>Conclusion</h2>
+  <p, id = leftp> The three major highly populated subzones in Singapore are:</p>
+  <li>Tampines East</li>
+  <li>Woodlands East</li>
+  <li>Bedok North</li>
+
+</div>
+
+
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
+<script src="https://d3js.org/d3-geo-projection.v2.min.js"></script>
+
+<script>
+  let width = 1000, height = 600;
+
+  let svg = d3.select("svg")
+      .attr("viewBox", "0 0 " + width + " " + height);
+
+  // Create a fixed window panel
+  let infoPanel = d3.select("body")
+  .append("div")
+  .attr("class", "info-panel")
+  .style("position", "fixed")
+  .style("bottom", "20px")
+  .style("right", "20px")
+  .style("background-color", "#fff")
+  .style("padding", "10px")
+  .style("border", "1px solid #ccc")
+  .style("border-radius", "5px")
+  .style("box-shadow", "0 2px 4px rgba(0,0,0,0.1)")
+  .style("opacity", 0)
+  .style("pointer-events", "none");
+
+  // Define the tooltip variable to select the tooltip element
+  let tooltip = d3.select(".tooltip");
+
+  // Load external data and boot
+  Promise.all([d3.json("sgmap.json"), d3.csv("population2023.csv")]).then(data => {
+
+    let mapData = data[0].features;
+    let popData = data[1];
+
+    // Merge pop data with map data
+    mapData.forEach(d => {
+      let subzone = popData.find(e => e.Subzone.toUpperCase() == d.properties.Name);
+      d.popdata = (subzone != undefined) ? parseInt(subzone.Population) : 0;
+    });
+
+    // Map and projection
+    let projection = d3.geoMercator()
+        .center([103.851959, 1.290270])
+        .fitExtent([[20, 20], [980, 580]], data[0]);
+
+    let geopath = d3.geoPath().projection(projection);
+
+    let colorScale = d3.scaleSequential(d3.interpolateViridis)
+        .domain([0, d3.max(mapData, d => d.popdata)]);
+
+        svg.append("g")
+        .attr("id", "districts")
+        .selectAll("path")
+        .data(mapData)
+        .enter()
+        .append("path")
+        .attr("d", geopath)
+        .attr("stroke", "black")
+        .attr("fill", d => {
+        if (d.popdata === 0) {
+        return "black"; // Set color to black if population is 0
+        } else {
+        return colorScale(d.popdata); // Use color scale for non-zero population
+        }
+        })
+        .attr("fill-opacity", 0.75) // Set fill opacity to x%
+        .attr("stroke-width", 1) // Initial stroke width
+        .attr("transform-origin", d => {
+        const centroid = geopath.centroid(d);
+        return `${centroid[0]}px ${centroid[1]}px`; // Set transform origin to centroid
+        })
+        // Update the tooltip position to be relative to the mouse pointer
+        .on("mouseover", function (event, d) {
+        const bbox = this.getBBox();
+        const area = bbox.width * bbox.height;
+        const minArea = 50; // Minimum area of the polygons
+        const maxArea = 55000; // Maximum area of the polygons
+        const scaleFactor =2- (area - minArea) / (maxArea - minArea); // Adjust the scaling factor range as needed
+        console.log(area);
+        console.log(scaleFactor)
+        d3.select(this)
+        .raise()
+        .transition()
+        .duration(200)
+        .attr("stroke-width", 3)
+        .attr("transform", `scale(${scaleFactor})`) // Scale up the path on hover
+        // Show info panel
+        // infoPanel.transition().duration(200).style("opacity", 1).style("pointer-events", "auto");
+        // infoPanel.html(`<strong>${d.properties.Name}</strong><br>
+        //               Population: ${d.popdata}<br>
+        //               Region Perimeter: ${geopath.area(d)}<br>
+        //               Region Area: ${geopath.bounds(d)[1][0] - geopath.bounds(d)[0][0]}`);
+        // Show tooltip              
+        tooltip.style("opacity", 1)
+            .html(`<strong>${d.properties.Name}</strong><br>
+            Population: ${d.popdata}<br>
+            Region Perimeter: ${geopath.area(d)}<br>
+            Region Area: ${geopath.bounds(d)[1][0] - geopath.bounds(d)[0][0]}`)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px");
+        })
+        .on("mouseout", function () {
+        d3.select(this)
+        .transition()
+        .duration(200)
+        .attr("stroke-width", 1)
+        .style("opacity", 1)
+        .attr("transform", "scale(1)");
+
+      //   // Hide info panel
+      // infoPanel.transition().duration(200).style("opacity", 0).style("pointer-events", "none");
+      
+      // Hide tooltip
+      tooltip.style("opacity", 0);
+        });
+
+  // Legend
+  let legendData = colorScale.ticks(5);
+  let legend = d3.select("#legend");
+
+  legend.append("div").text("Population [people]:");
+  legendData.forEach(d => {
+    let legendItem = legend.append("div").attr("class", "legend-item");
+    if (d === 0) {
+      legendItem.append("div").attr("class", "legend-color")
+        .style("background-color", "black");
+      legendItem.append("span").text("0");
+    } else {
+      legendItem.append("div").attr("class", "legend-color")
+        .style("background-color", colorScale(d));
+      legendItem.append("span").text(d);
+    }
+  });
+  });
+
+</script>
+
+</body>
+</html>
